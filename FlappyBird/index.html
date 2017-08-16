@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Title</title>
+  <style>
+    #ctx {
+      display: block;
+      margin: 0 auto;
+      border: 1px solid #000;
+      
+    }
+    
+    .box,
+    .boxEnd {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 300px;
+      height: 200px;
+      background-color: transparent;
+      border: 1px solid rebeccapurple;
+      color: red;
+      text-align: center;
+      font-family: "幼圆";
+      border-radius: 8px;
+    }
+    
+    .btn,
+    .btnEnd {
+      width: 120px;
+      height: 40px;
+      line-height: 40px;
+      margin: 50px auto 0;
+      cursor: pointer;
+      font-size: 20px;
+      font-weight: 700;
+      /*background-color: pink;*/
+      border: 1px solid rebeccapurple;
+      border-radius: 8px;
+    }
+    .btnEnd {
+      margin-top: 20px;
+    }
+    
+    .hide {
+      display: none;
+    }
+  
+  </style>
+</head>
+<body>
+<canvas width="800" height="600" id="ctx"></canvas>
+<div class="box">
+  <h1>Flappy Bird</h1>
+  <div class="btn">开始游戏</div>
+</div>
+<div class="boxEnd hide">
+  <h1></h1>
+  <div class="btnEnd">重新开始</div>
+</div>
+
+
+<script src="sky.js"></script>
+<script src="land.js"></script>
+<script src="pipe.js"></script>
+<script src="bird.js"></script>
+<script>
+  var cas = document.getElementById("ctx");
+  
+  //使用canvas标签获取绘图工具
+  var ctx = cas.getContext("2d");
+  
+  //初始背景图
+  var img = new Image();
+  img.src = "./imgs/startbg.png";
+  img.onload = function () {
+    ctx.drawImage(img, 0, 0);
+  }
+  
+  //判断所有图片加载完成才执行callback
+  function loadImgs(arr, callback) {
+    var count = 0;
+    var imgObj = {};
+    for (var i = 0; i < arr.length; i++) {
+      var img = new Image();
+      img.src = "./imgs/" + arr[i] + ".png";
+      imgObj[arr[i]] = img;
+      img.onload = function () {
+        count++;
+        if (count == arr.length) {
+          //所有的图片都加载完了
+          callback(imgObj);
+        }
+      }
+    }
+  }
+  
+  //调用加载图片函数
+  loadImgs(["birds", "sky", "land", "pipe1", "pipe2"], function (imgObj) {
+    var birdImg = imgObj["birds"];
+    var skyImg = imgObj["sky"];
+    var landImg = imgObj["land"];
+    var pipeTopImg = imgObj["pipe2"];
+    var pipeBottomImg = imgObj["pipe1"];
+    var roles = [];
+  
+    //获取两个提示框
+    var box = document.querySelector(".box");
+    var btn = document.querySelector(".btn");
+    var boxEnd = document.querySelector(".boxEnd");
+    var btnEnd = document.querySelector(".btnEnd");
+  
+    btnEnd.onclick = function () {
+      location.reload();
+    }
+    
+    
+    btn.onclick = function () {
+      box.className += " hide";
+      //创建天空对象
+      for (var i = 0; i < 2; i++) {
+        roles.push(new Sky({
+          x: i * skyImg.width,
+          y: 0,
+          img: skyImg,
+          ctx: ctx
+        }));
+      }
+  
+      //创建管道对象
+      for (var i = 0; i < 6; i++) {
+        roles.push(new Pipe({
+          x: i * pipeTopImg.width * 3 + 300,
+          imgTop: pipeTopImg,
+          imgBottom: pipeBottomImg,
+          ctx: ctx
+        }))
+      }
+  
+      //创建陆地对象
+      for (var i = 0; i < 4; i++) {
+        roles.push(new Land({
+          x: i * landImg.width,
+          y: cas.height - landImg.height,
+          img: landImg,
+          ctx: ctx
+        }));
+      }
+  
+      //创建小鸟对象
+      var hero = new Bird({
+        x: 100,
+        y: 100,
+        img: birdImg,
+        ctx: ctx,
+      });
+      roles.push(hero);
+  
+  
+      //时间戳，用来实现每一帧自由落体时间计算对应下落距离
+      var startTime = new Date();
+      var currentTime = new Date();
+  
+      var time1 = new Date();
+  
+      //渲染
+      function render() {
+        currentTime = new Date();
+        var time = currentTime - startTime;
+        startTime = currentTime;
+        //console.log(time);
+    
+        //清空之前画布中的所有内容
+        ctx.clearRect(0, 0, cas.width, cas.height);
+        //碰撞检测中给管道绘制了路径
+        //将之前绘制好的6个管道的路径清空，因为下面绘制的时候，要画新的路径了
+        //如果不清空，那么所有的路径就会叠加在一起
+        ctx.beginPath();
+    
+        //绘制所有需要被绘制的内容
+        for (var i = 0; i < roles.length; i++) {
+          roles[i].draw(time);
+        }
+    
+        
+        //绘制文字计算坚持时间
+        var time2 = new Date();
+        var jctime = (time2 - time1)/1000;
+        ctx.fillStyle = "hotpink";
+        ctx.font = "24px 华文行楷";
+        ctx.fillText("计时：" + jctime + "秒", 350, 550);
+    
+    
+        //条件判断中的内容为小鸟是否上天入地，或者小鸟是否撞到了管道！
+        var isAlive = !(hero.y < 0 || hero.y + hero.height > cas.height - landImg.height || ctx.isPointInPath(hero.x + hero.width / 2, hero.y + hero.height / 2));
+        //如果小鸟没有上天入地碰管道，游戏继续，否则game over!
+        if(isAlive) {
+          //实现帧动画
+          requestAnimationFrame(render);
+        }else {
+          boxEnd.children[0].innerHTML = "Game Over!" + " <br>你坚持了" + jctime + "秒";
+//          boxEnd.children[0].style.fontSize = "20px";
+          boxEnd.className = "boxEnd";
+//          alert("Game Over!" + " 你坚持了" + jctime + "秒");
+//          location.reload();
+          
+        }
+    
+    
+    
+    
+      }
+  
+      render();
+      //点击画布让小鸟向上飞
+      cas.onclick = function () {
+        hero.speed = -0.3;
+      }
+      document.onkeydown = function (e) {
+        if (e.keyCode == 32) {
+          cas.onclick();
+        }
+      }
+    }
+    
+    
+    
+  });
+  
+  
+  
+
+</script>
+</body>
+</html>
